@@ -1,3 +1,4 @@
+from copy import deepcopy
 from os import error
 import qutip as qt
 from qutip.tensor import tensor
@@ -19,7 +20,7 @@ class Simulation():
     '''
     Setting the simulated experiment
     '''
-    def __init__(self,processor,compiler,t_list=np.linspace(0.1,10,100),
+    def __init__(self,processor,compiler,t_list=np.linspace(0.1,5,100),
         detuning_list=np.linspace(-0.3,1,100),swap_time_list=[],artificial_detuning=0,
         reading_time=None,initial_state=None):
         self.qubit_probe_params={}
@@ -38,11 +39,13 @@ class Simulation():
             self.initial_state=initial_state
 
     def run_circuit(self,circuit):
-        self.processor.load_circuit(circuit, compiler=self.compiler)
+        #use copied processor to initialize
+        self.copied_processor=deepcopy(self.processor)
+        self.copied_processor.load_circuit(circuit, compiler=self.compiler)
         option=Options()
         option.store_final_state=True
         option.store_states=False
-        result=self.processor.run_state(init_state =self.initial_state,options=option)
+        result=self.copied_processor.run_state(init_state =self.initial_state,options=option)
         state=result.final_state
         return state 
 
@@ -134,6 +137,22 @@ class Simulation():
         circuit = QubitCircuit((self.processor.N))
         circuit.add_gate("X_R", targets=0)
         self.initial_state=self.run_circuit(circuit)
+        
+    def qubit_T1_measurement(self):
+        '''
+        simulation of qubit T1 
+        '''
+        self.x_array=self.t_list
+        self.set_up_1D_experiment(title='phonon T1')
+        i=0
+        for t in tqdm(self.x_array):
+            circuit = QubitCircuit((self.processor.N))
+            circuit.add_gate("X_R", targets=0)
+            circuit.add_gate('Wait',targets=0,arg_value=t)
+            self.post_process(circuit,i)
+            i=i+1
+        self.fitter=hbar_fitting.fitter(self.x_array,self.y_array)
+        self.fit_result.append(self.fitter.fit_T1())
 
     def phonon_T1_measurement(self):
         '''
@@ -319,11 +338,11 @@ class Simulation():
                 circuit = QubitCircuit((self.processor.N))
                 self.phonon_drive_params['Omega']=np.sqrt(x**2+y**2)*Omega_alpha_ratio
                 self.phonon_drive_params['rotate_direction']=np.angle(x+1j*y)+0.5*np.pi
-                circuit.add_gate("XY_R_GB", targets=0,arg_value=self.phonon_drive_params)
-                circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})
-                circuit.add_gate('Wait',targets=0,arg_value=self.reading_time)
+                circuit.add_gate("XY_R_GB", targets=0,arg_value=self.phonon_drive_params)#phonon displacement
+                circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})#first half pi pulse
+                circuit.add_gate('Wait',targets=0,arg_value=self.reading_time)#wait to accumulate phase
                 circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
-                    'rotate_direction':2*np.pi*self.artificial_detuning*self.reading_time})
+                    'rotate_direction':2*np.pi*self.artificial_detuning*self.reading_time})#second half pi pulse
                 self.post_process(circuit,i)
             storage_list_2D.append(self.y_array*2-1)
 
