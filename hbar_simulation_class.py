@@ -20,7 +20,7 @@ class Simulation():
     '''
     Setting the simulated experiment
     '''
-    def __init__(self,processor,compiler,t_list=np.linspace(0.1,5,100),
+    def __init__(self,processor,compiler,t_list=np.linspace(0.1,10,100),
         detuning_list=np.linspace(-0.3,1,100),swap_time_list=[],artificial_detuning=0,
         reading_time=None,initial_state=None):
         self.qubit_probe_params={}
@@ -67,7 +67,7 @@ class Simulation():
         plt.ylabel("qubit expected population",fontsize=18)
         plt.ylim((0,1))
 
-    def post_process(self,circuit,i,readout_type='read qubit'):
+    def post_process(self,circuit,i,average_num=1,readout_type='read qubit'):
         '''
         simulate the circuit and get the data
         refresh the plot
@@ -83,8 +83,11 @@ class Simulation():
         else:
             raise NameError('readout object select wrong')
         expected_population=np.abs(expected_population)
-    
-        self.y_array[i]=expected_population
+        #update new data to the plot
+        n=int(i/average_num)#position of the point on the plot
+        m=i % average_num
+        self.y_array[n]=(expected_population+m*self.y_array[n])/(m+1.0)
+        # print(m,n,self.y_array[n])
         self.line.set_ydata(self.y_array)
         self.figure.canvas.draw()
         self.figure.canvas.flush_events()
@@ -128,7 +131,7 @@ class Simulation():
         circuit = QubitCircuit((self.processor.N))
         circuit.add_gate("XY_R_GB", targets=0,arg_value=self.phonon_drive_params)
         self.initial_state=self.run_circuit(circuit)
-
+        self.plot_phonon_wigner()
     def qubit_pi_pulse(self):
         '''
         simulation of giving pi pulse on qubit
@@ -273,77 +276,195 @@ class Simulation():
         self.fitter=hbar_fitting.fitter(self.x_array,self.y_array)
 
 
-    def wigner_measurement_1D(self,phonon_drive_params=None,steps=40,
-    displacement_type='simulated',second_pulse_flip=False,set_alpha_range=None):
+    def wigner_measurement_1D(self,
+                             phonon_drive_params,
+                             starkshift_param,
+                             steps=40,
+                             phase_calibration=False,
+                             if_echo=False,
+                             first_pulse_phases=[0]
+                             ):
         '''
-        displacement_type can be choose as 'simulated' or 'ideal'
-        the second_pulse_flip is choose if the second half pi pulse change to opposite direction
+        this is 1D wigner tomography
         '''
-        stored_initial_state=self.initial_state
-        if set_alpha_range:
-            self.alpha=set_alpha_range
-        else:
-            #calibration of the alpha axis based on wigner fitting
-            self.generate_coherent_state(phonon_drive_params)
-            self.fit_wigner()
-       
-        self.x_array=np.linspace(-np.abs(self.alpha),np.abs(self.alpha),steps)
-        
-        #set experiment up
-        self.initial_state=stored_initial_state
+        stored_initial_state=deepcopy(self.initial_state)
+        self.phonon_drive_params=deepcopy(phonon_drive_params)
+        self.generate_coherent_state(self.phonon_drive_params)
+        self.fit_wigner()
+        axis=np.linspace(-np.abs(self.alpha),np.abs(self.alpha),steps)
+        self.initial_state=deepcopy(stored_initial_state)
+        Omega_alpha_ratio=self.phonon_drive_params['Omega']/self.alpha
+        self.x_array=axis
         self.set_up_1D_experiment(title='wigner measurement',xlabel='alpha')
-        Omega_max=self.phonon_drive_params['Omega']
-        Omega_list=np.linspace(0,Omega_max,steps)
-        
-        for i, alpha in enumerate(self.x_array):
-            self.phonon_drive_params['Omega']=Omega_list[i]
-            circuit = QubitCircuit((self.processor.N))
-            if displacement_type=='simulated':
-                circuit.add_gate("XY_R_GB", targets=0,arg_value=self.phonon_drive_params)
-            elif displacement_type=='ideal':
-                displacement_operator=tensor(qeye(self.processor.dims[0]),
-                qt.displace(self.processor.dims[1],alpha))
-                if self.initial_state.shape[1]==1:
-                    self.initial_state=displacement_operator*stored_initial_state
-                else:
-                    self.initial_state=displacement_operator*stored_initial_state*displacement_operator
-            else:
-                raise NameError('displacement type select wrong')
-            circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})
-            circuit.add_gate('Wait',targets=0,arg_value=self.reading_time)
-            if second_pulse_flip:
-                circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
-                'rotate_direction':2*np.pi*self.artificial_detuning*self.reading_time+np.pi})
-            else:
-                circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
-                'rotate_direction':2*np.pi*self.artificial_detuning*self.reading_time})
-            self.post_process(circuit,i)
-            i=i+1
+        if if_echo:
+            duration=starkshift_param['duration']
+            detuning=starkshift_param['detuning']
+            starkshift_param_1={'detuning':detuning,
+                'duration':duration/2}
+            starkshift_param_2={'detuning':-detuning,
+                'duration':duration/2}
 
-    def wigner_measurement_2D(self,phonon_drive_params=None,steps=40):
+        i=0
+        if phase_calibration:
+            self.x_array=np.linspace(-2*np.pi,2*np.pi,30)
+            self.set_up_1D_experiment(title='wigner measurement phase calibration',xlabel='phase')
+            self.ideal_phonon_fock(0)
+            i=0
+            for second_phase in tqdm(self.x_array):
+                if if_echo:
+                    circuit = QubitCircuit((self.processor.N))
+                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})
+                    circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param_1)
+                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi})
+                    circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param_2)
+                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
+                        'rotate_direction':second_phase})
+                    self.post_process(circuit,i)
+                    i=i+1
+                else:
+                    circuit = QubitCircuit((self.processor.N))
+                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})
+                    circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param)
+                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
+                        'rotate_direction':second_phase})
+                    self.post_process(circuit,i)
+                    i=i+1
+            self.fitter=hbar_fitting.fitter(self.x_array,self.y_array)
+            self.fit_result.append(self.fitter.fit_phase_calibration())
+        else:
+            for y in tqdm(axis):
+                circuit = QubitCircuit((self.processor.N))
+                self.initial_state=deepcopy(stored_initial_state)
+                self.phonon_drive_params['Omega']=y*Omega_alpha_ratio
+                self.phonon_drive_params['rotate_direction']=0
+                circuit.add_gate("XY_R_GB", targets=0,arg_value=self.phonon_drive_params)
+                self.initial_state=self.run_circuit(circuit)
+                if if_echo:
+                    for first_phase in first_pulse_phases:
+                        circuit = QubitCircuit((self.processor.N))
+                        circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,
+                        'rotate_direction':first_phase})
+                        circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param_1)
+                        circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi,
+                        'rotate_direction':first_phase})
+                        circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param_2)
+                        circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
+                            'rotate_direction':self.calibration_phase+first_phase})
+                        self.post_process(circuit,i,len(first_pulse_phases))
+                        i=i+1
+
+                else:
+                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})
+                    circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param)
+                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
+                        'rotate_direction':self.calibration_phase})
+                    self.post_process(circuit,i)
+                    i=i+1
+    def wigner_measurement_time_calibrate(self,
+                             phonon_drive_params,
+                             durations,
+                             detuning,
+                             calibration_phases,
+                             steps=40,
+                             if_echo=False,
+                             first_pulse_phases=[0]
+                             ):
+        '''
+        this is 1D wigner tomography
+        '''
+        stored_initial_state=deepcopy(self.initial_state)
+        self.phonon_drive_params=deepcopy(phonon_drive_params)
+        self.generate_coherent_state(self.phonon_drive_params)
+        self.fit_wigner()
+
+        self.x_array=durations
+        self.set_up_1D_experiment(title='wigner time calibration',xlabel='t(us)')
+
+        i=0
+        for y in tqdm(self.x_array):
+            circuit = QubitCircuit((self.processor.N))
+            self.initial_state=deepcopy(stored_initial_state)
+            circuit.add_gate("XY_R_GB", targets=0,arg_value=self.phonon_drive_params)
+            self.initial_state=self.run_circuit(circuit)
+            if if_echo:
+                for first_phase in first_pulse_phases:
+                    circuit = QubitCircuit((self.processor.N))
+                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,
+                    'rotate_direction':first_phase})
+                    circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':y,'detuning':detuning})
+                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi,
+                    'rotate_direction':first_phase})
+                    circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':y,'detuning':-detuning})
+                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
+                        'rotate_direction':calibration_phases[int(i/len(first_pulse_phases))]+first_phase})
+                    self.post_process(circuit,i,len(first_pulse_phases))
+                    i=i+1
+
+            else:
+                circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})
+                circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param)
+                circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
+                    'rotate_direction':self.calibration_phase})
+                self.post_process(circuit,i)
+                i=i+1          
+
+    def wigner_measurement_2D(self,
+                            phonon_drive_params,
+                            starkshift_param,
+                            steps=40,
+                            if_echo=False,
+                            first_pulse_phases=[0]):
         '''
         steps is the number of the point in the ploting axis also the simulation times
         '''
-        stored_initial_state=self.initial_state
-        self.generate_coherent_state(phonon_drive_params)
+        stored_initial_state=deepcopy(self.initial_state)
+        self.phonon_drive_params=deepcopy(phonon_drive_params)
+        self.generate_coherent_state(self.phonon_drive_params)
         self.fit_wigner()
         axis=np.linspace(-np.abs(self.alpha),np.abs(self.alpha),steps)
-        self.initial_state=stored_initial_state
+        self.initial_state=deepcopy(stored_initial_state)
         Omega_alpha_ratio=self.phonon_drive_params['Omega']/self.alpha
         storage_list_2D=[]
+
+        if if_echo:
+            duration=starkshift_param['duration']
+            detuning=starkshift_param['detuning']
+            starkshift_param_1={'detuning':detuning,
+                'duration':duration/2}
+            starkshift_param_2={'detuning':-detuning,
+                'duration':duration/2}
+
         for x in tqdm(axis):
             self.x_array=axis
             self.set_up_1D_experiment(title='wigner measurement',xlabel='alpha')
-            for i, y in enumerate(axis):
+            i=0
+            for y in axis:
                 circuit = QubitCircuit((self.processor.N))
+                self.initial_state=deepcopy(stored_initial_state)
                 self.phonon_drive_params['Omega']=np.sqrt(x**2+y**2)*Omega_alpha_ratio
                 self.phonon_drive_params['rotate_direction']=np.angle(x+1j*y)+0.5*np.pi
                 circuit.add_gate("XY_R_GB", targets=0,arg_value=self.phonon_drive_params)#phonon displacement
-                circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})#first half pi pulse
-                circuit.add_gate('Wait',targets=0,arg_value=self.reading_time)#wait to accumulate phase
-                circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
-                    'rotate_direction':2*np.pi*self.artificial_detuning*self.reading_time})#second half pi pulse
-                self.post_process(circuit,i)
+                self.initial_state=self.run_circuit(circuit)
+                if if_echo:
+                    for first_phase in first_pulse_phases:
+                        circuit = QubitCircuit((self.processor.N))
+                        circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,
+                        'rotate_direction':first_phase})
+                        circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param_1)
+                        circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi,
+                        'rotate_direction':first_phase})
+                        circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param_2)
+                        circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
+                            'rotate_direction':self.calibration_phase+first_phase})
+                        self.post_process(circuit,i,len(first_pulse_phases))
+                        i=i+1
+                else:
+                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})#first half pi pulse
+                    circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param)#wait to accumulate phase
+                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
+                        'rotate_direction':2*np.pi*self.artificial_detuning*self.reading_time})#second half pi pulse
+                    self.post_process(circuit,i)
+                    i=i+1
             storage_list_2D.append(self.y_array*2-1)
 
         xx,yy=np.meshgrid(axis,axis)
@@ -363,7 +484,9 @@ class Simulation():
         self.alpha=(1j*wigner_array[position[0]]+wigner_array[position[1]])[0]
         alpha_fidelity=expect(self.initial_state.ptrace(1),coherent(self.processor.dims[1],self.alpha))
         print(f'alpha is {self.alpha}, fidelity is {alpha_fidelity}')
-
+    def plot_phonon_wigner(self):
+        phonon_state=self.initial_state.ptrace(1)
+        qt.plot_wigner_fock_distribution(phonon_state)
     def generate_cat(self):
         # initial_state is |g,0>
         circuit = QubitCircuit((self.processor.N))

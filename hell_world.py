@@ -57,7 +57,7 @@ qb5d97_simulation.qubit_T1_measurement()
 For higher order phonon rabi
 '''
 pi_time_list=[]
-for n in range(1):
+for n in range(8):
     qb5d97_simulation.t_list=np.linspace(0.01,10,100)
     qb5d97_simulation.generate_fock_state(n)
     qb5d97_simulation.phonon_rabi_measurement()  
@@ -81,20 +81,6 @@ figure, ax = plt.subplots(figsize=(8,6))
 for i in range(5):
     ax.plot(qb5d97_simulation.t_list,y_2d_list[i],label='Fock{}'.format(i))
 plt.legend()
-
-#%%
-with_decay=y_2d_list
-without_decay = y_2d_list#TODO: Remove THIS. I added it here to make below code run
-#%%
-figure, ax = plt.subplots(figsize=(8,6))
-colors = plt.cm.jet(np.linspace(0.1,0.9,5))
-for i in range(5):
-    ax.plot(qb5d97_simulation.t_list,without_decay[i],'--',color=colors[i],label='without decay Fock{}'.format(i))
-    ax.plot(qb5d97_simulation.t_list,with_decay[i],'-',color=colors[i],label='with decay Fock{}'.format(i))
-plt.legend()
-plt.show()##Remove this Line
-
-
 
 #%%
 '''

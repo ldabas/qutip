@@ -7,9 +7,9 @@ from lmfit.models import LorentzianModel,ConstantModel
 
 def Lorentz(x,x0,w,A,B):
     return A*(1-1/(1+((x-x0)/w)**2))+B
-
-def Cos(x, a, f, os):
-    return os + a * np.cos(2 * np.pi * (f * x ))
+    
+def Cos(x, a, f, os,phi):
+    return os + a * np.cos( (f * x )+phi)
 
 def Exp_decay(x, A, tau, ofs):
     return A * np.exp(-x / tau) + ofs
@@ -110,7 +110,25 @@ class fitter(object):
         return  {'w0': popt[0],
         'width':popt[1],
         }
-    
+
+    def fit_phase_calibration(self):
+        x_array=self.x_array
+        y_array=self.y_array
+        minimum_amp=np.min(y_array)
+        max_amp=np.max(y_array)
+        popt,pcov =curve_fit(Cos,x_array,y_array,[(max_amp-minimum_amp)/2,1,(max_amp+minimum_amp)/2,0])
+        fig,ax=plt.subplots()
+        if popt[0]<0:
+            phase=-popt[-1]+np.pi
+        else:
+            phase=-popt[-1]
+        plt.plot(x_array,y_array,label='simulated')
+        plt.plot(x_array,Cos(x_array,*popt),label='fitted')
+        plt.title(('phi = %.3f'% (phase)))
+        plt.legend()
+        plt.show()
+        print(popt)
+        return {'phi':phase}
     def fit_multi_peak(self,peaks):
         x_array=self.x_array
         y_array=self.y_array

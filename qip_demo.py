@@ -109,7 +109,7 @@ def gauss_rx_compiler(gate, args):
 def wait_complier(gate,args):
     targets = gate.targets  # target qubit
     parameters = args["params"]
-    time_step=50e-3 #assume T1 at least 1us for each part of the system
+    time_step=3e-3 #assume T1 at least 1us for each part of the system
     duration=gate.arg_value
     tlist=np.linspace(0,duration,int(duration/time_step))
     coeff=0*tlist
@@ -219,5 +219,5 @@ test_simulation=Simulation(test_processor,test_compiler)
 # %%
 test_simulation.qubit_T1_measurement()
 # %%
-test_processor.noise
+test_simulation.copied_processor.plot_pulses()
 # %%
