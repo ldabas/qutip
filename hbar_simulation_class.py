@@ -114,12 +114,18 @@ class Simulation():
         '''
         self.initial_state=basis(self.processor.dims, [0]+[0]*(self.processor.N-1))
         circuit = QubitCircuit((self.processor.N))
-        for swap_t in self.swap_time_list[:fock_number]:
-            circuit.add_gate("X_R", targets=0)
+        if fock_number==0.5:
+            circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})
+            swap_t=self.swap_time_list[0]
             circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':swap_t,'detuning':detuning})
+        else:
+            for swap_t in self.swap_time_list[:fock_number]:
+                circuit.add_gate("X_R", targets=0)
+                circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':swap_t,'detuning':detuning})
         if fock_number!=0:
             self.initial_state=self.run_circuit(circuit)
-        print('fidelity of phonon fock {} :'.format(fock_number),expect(self.initial_state.ptrace(1),fock(self.processor.dims[1],fock_number)))
+        if fock_number!=0.5:
+            print('fidelity of phonon fock {} :'.format(fock_number),expect(self.initial_state.ptrace(1),fock(self.processor.dims[1],fock_number)))
     
     def generate_coherent_state(self,phonon_drive_params=None):
         '''
@@ -468,14 +474,16 @@ class Simulation():
             storage_list_2D.append(self.y_array*2-1)
 
         xx,yy=np.meshgrid(axis,axis)
-        plt.figure(figsize=(6,6))
-        plt.contourf(xx, yy, storage_list_2D,40,cmap='RdBu_r')
-        plt.gca().set_aspect('equal')
-        plt.colorbar().set_label("qubit")
-        plt.xlabel("x")
-        plt.ylabel("y")
-        plt.show()
+        fig, ax1, = plt.subplots(1, 1, figsize=(6,6))
+        im = ax1.pcolormesh(yy,xx, storage_list_2D, cmap='seismic',vmin=-1, vmax=1)
+        fig.colorbar(im)
+        fig.gca().set_aspect('equal', adjustable='box')
+        fig.legend()
+        fig.show()
+
         return storage_list_2D
+
+
     
     def fit_wigner(self):
         wigner_array=np.linspace(-10,10,201)

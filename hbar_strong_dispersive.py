@@ -1,7 +1,9 @@
 # %%
+from copy import deepcopy
 import enum
 from re import T
 from numpy.core.function_base import linspace
+from scipy.sparse import data
 from qutip.visualization import plot_fock_distribution
 from qutip.states import coherent
 import hbar_compiler
@@ -54,11 +56,16 @@ qb_compiler = hbar_compiler.HBAR_Compiler(qb_processor.num_qubits,\
 qb_simulation=hbar_simulation_class.Simulation(qb_processor,qb_compiler)
 qb_simulation.swap_time_list=pi_time_list
 
+
+
 # %%
 '''
 qubit T1 measurement to test code
 '''
 qb_simulation.qubit_T1_measurement()
+
+
+
 # %%
 '''
 For higher order phonon rabi
@@ -70,6 +77,9 @@ for n in range(4):
     qb_simulation.phonon_rabi_measurement()  
     pi_time_list.append(qb_simulation.fit_result[-1]['swap_time'])
     qb_simulation.swap_time_list=pi_time_list
+
+
+
 # %%
 qb_simulation.t_list=np.linspace(0.01,10,101)
 #first,let's calibrate the artificial detuning
@@ -77,6 +87,10 @@ qb_simulation.ideal_phonon_fock(0)
 qb_simulation.qubit_ramsey_measurement(artificial_detuning=interaction_1_freq-qubit_freq+0.5,
 starkshift_amp=interaction_1_freq-phonon_freq,if_fit=True)
 extra_detuning=qb_simulation.fit_result[-1]['delta']-0.5
+
+
+
+
 #%%
 #test parity measurement,with generated phonon fock
 y_2d_list=[]
@@ -85,11 +99,14 @@ for i in range(5):
     qb_simulation.qubit_ramsey_measurement(artificial_detuning=interaction_1_freq-qubit_freq-extra_detuning,
     starkshift_amp=interaction_1_freq-phonon_freq,if_fit=False)
     y_2d_list.append(qb_simulation.y_array)
-#%%
 figure, ax = plt.subplots(figsize=(8,6))
 for i in range(5):
     ax.plot(qb_simulation.t_list,y_2d_list[i],label='Fock{}'.format(i))
 plt.legend()
+
+
+
+
 # %%
 #plot the sum parity,find the parity measurement time
 sum=np.zeros(len(qb_simulation.t_list))
@@ -101,6 +118,11 @@ t_parity=qb_simulation.t_list[np.argsort(sum)[-1]]
 ax.plot([t_parity,t_parity],[np.min(sum),np.max(sum)])
 ax.set_title('best parity measurement time is {} us'.format(t_parity))
 plt.show()
+
+
+
+
+
 # %%
 param_drive={'Omega':0.5,
     'sigma':0.5,
@@ -112,26 +134,64 @@ qb_simulation.generate_coherent_state(param_drive)
 qb_simulation.fit_wigner()
 starkshift_param={'detuning':interaction_1_freq-phonon_freq,
                 'duration':7}
-#%%
+
+
+
+#%% phase calibration
 qb_simulation.wigner_measurement_1D(param_drive,starkshift_param,steps=30,
 phase_calibration=True,if_echo=True)
+
+
 #%%
+#wigner 1D
 calibration_phase=0.126
 qb_simulation.calibration_phase=calibration_phase
 qb_simulation.ideal_phonon_fock(0)
-qb_simulation.wigner_measurement_1D(param_drive,starkshift_param,steps=20,
+qb_simulation.wigner_measurement_1D(param_drive,starkshift_param,steps=40,
 phase_calibration=False,if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
-# %%
-qb_simulation.ideal_phonon_fock(0)
-qb_simulation.generate_coherent_state(param_drive)
-qb_simulation.fit_wigner()
-# %%
-param_drive
-# %%
-0/10
+
 # %%
 calibration_phase=0.126
 qb_simulation.calibration_phase=calibration_phase
-qb_simulation.wigner_measurement_2D(param_drive,starkshift_param,steps=15,
+qb_simulation.generate_fock_state(0)
+fock_0_wigner_data=qb_simulation.wigner_measurement_2D(param_drive,starkshift_param,steps=40,
 if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
+
+# %%
+phase_list=[]
+time_list=[7,7.05,7.1]
+for time in time_list:
+    starkshift_param={'detuning':interaction_1_freq-phonon_freq,
+                    'duration':time}
+    qb_simulation.wigner_measurement_1D(param_drive,starkshift_param,steps=30,
+    phase_calibration=True,if_echo=True)
+    phase_list.append(qb_simulation.fit_result[-1]['phi'])
+phase_fit=np.polyfit(time_list,phase_list,1)
+duration_list=np.linspace(7,7.2,30)
+calibration_phase_list=phase_fit[0]*duration_list+phase_fit[1]
+# %%
+qb_simulation.generate_fock_state(1)
+qb_simulation.wigner_measurement_time_calibrate(param_drive,duration_list,interaction_1_freq-phonon_freq,
+calibration_phases=calibration_phase_list,if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
+# %%
+
+wigner_data_list=[]
+for i in [0.5,1,2]:
+
+    param_drive={'Omega':0.5,
+    'sigma':0.5,
+    'duration':10,
+    'rotate_direction':0,
+    'detuning':-qubit_phonon_detuning
+    }
+    starkshift_param={'detuning':interaction_1_freq-phonon_freq,
+                'duration':7}
+    calibration_phase=0.126
+    qb_simulation.calibration_phase=calibration_phase
+    qb_simulation.generate_fock_state(i)
+    wigner_data=qb_simulation.wigner_measurement_2D(param_drive,starkshift_param,steps=40,
+    if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
+    wigner_data_list.append(wigner_data)
+    np.save('simulated_data//fock_{}_wigner.npy'.format(i),wigner_data)
+
 # %%

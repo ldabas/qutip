@@ -195,7 +195,7 @@ def _angle_slice(slicearray, theta, phi):
     return theta, phi
 
 
-def wigner(psi, xvec, yvec, method='clenshaw', g=sqrt(2),
+def wigner(psi, xvec, yvec, method='clenshaw', g=2,
            sparse=False, parfor=False):
     """Wigner function for a state vector or density matrix at points
     `xvec + i * yvec`.
