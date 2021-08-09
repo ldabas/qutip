@@ -67,7 +67,7 @@ class Simulation():
         plt.ylabel("qubit expected population",fontsize=18)
         plt.ylim((0,1))
 
-    def post_process(self,circuit,i,average_num=1,readout_type='read qubit'):
+    def post_process(self,circuit,i,readout_type='read qubit',average_num=1):
         '''
         simulate the circuit and get the data
         refresh the plot
@@ -108,14 +108,15 @@ class Simulation():
         self.initial_state=tensor(np.sqrt(1-expected_z)*fock(self.processor.dims[0],0)+np.sqrt(expected_z)*fock(self.processor.dims[0],1),
         basis(self.processor.dims[1:],[0]*(self.processor.N-1)))
 
-    def generate_fock_state(self,fock_number,detuning=0):
+    def generate_fock_state(self,fock_number,direction_phase=0,detuning=0):
         '''
         simulation of using qubit phonon swap to generate phonon fock state
         '''
         self.initial_state=basis(self.processor.dims, [0]+[0]*(self.processor.N-1))
         circuit = QubitCircuit((self.processor.N))
         if fock_number==0.5:
-            circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})
+            circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,
+            'rotate_direction':direction_phase})
             swap_t=self.swap_time_list[0]
             circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':swap_t,'detuning':detuning})
         else:
@@ -193,7 +194,7 @@ class Simulation():
         i=0
         for t in tqdm(self.x_array):
             circuit = QubitCircuit((self.processor.N))
-            circuit.add_gate("X_R", targets=0)
+            # circuit.add_gate("X_R", targets=0) because we change the naming way of phonon rabi
             circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':t,'detuning':detuning})
             self.post_process(circuit,i)
             i=i+1
