@@ -27,7 +27,7 @@ reload(hbar_fitting)
 #qubit dimission, we only consider g and e states here
 qubit_dim=2
 #phonon dimission
-phonon_dim=10
+phonon_dim=17
 #how many phonon modes we consider here
 phonon_num=1
 #the frequency difference between qubit and phonon (qubit minus phonon)
@@ -49,7 +49,8 @@ pi_time_list=[0.9616123677058709,
  0.5548147810734809,
  0.48027408123596266]
 #set up the processor and compiler,qb5d97 is the qubit we play around
-qb_processor=hbar_processor.HBAR_processor((phonon_num+1),t1,t2,dims,g=[0.26],\
+#Omega=50 because we use width of pi pulse as 20ns
+qb_processor=hbar_processor.HBAR_processor((phonon_num+1),t1,t2,dims, Omega=50/(2*np.pi),g=[0.26],\
     rest_place=qubit_phonon_detuning,FSR=13)
 
 qb_compiler = hbar_compiler.HBAR_Compiler(qb_processor.num_qubits,\
@@ -122,13 +123,28 @@ ax.set_title('best parity measurement time is {} us'.format(t_parity))
 plt.show()
 
 
-
-
-
 # %%
-param_drive={'Omega':0.5,
+'''
+calculate the driving amplitude in the real measurement
+drive amplitude in the experiment is 0.06
+for qubit operation, pi_amp=0.64, width of the pi pulse is 20us
+'''
+Omega_drive=50/(2*np.pi)/2.49986*np.pi/2/0.64*0.06
+#%%
+#probe phonon, because qubit and phonon dispersive coupling, phonon frequency changed
+param_probe={'Omega':0.1,
+    'sigma': 0.5,
+    'duration':5,
+    'amplitude_starkshift':0}
+qb_simulation.detuning_list=np.linspace(-qubit_phonon_detuning-0.05,-qubit_phonon_detuning+0.1,20)
+qb_simulation.spec_measurement(param_probe,readout_type='read phonon')
+#the phonon frequency move to 4.0915MHz.
+
+#%%
+#try find a good driving amplitude
+param_drive={'Omega':0.52,
     'sigma':0.5,
-    'duration':10,
+    'duration':12,
     'rotate_direction':np.pi,
     'detuning':-qubit_phonon_detuning
     }
@@ -136,29 +152,34 @@ qb_simulation.generate_coherent_state(param_drive)
 qb_simulation.fit_wigner()
 starkshift_param={'detuning':interaction_1_freq-phonon_freq,
                 'duration':7}
-
-
+abs(qb_simulation.alpha)
 
 #%% phase calibration
 qb_simulation.wigner_measurement_1D(param_drive,starkshift_param,steps=30,
 phase_calibration=True,if_echo=True)
 
-
 #%%
 #wigner 1D
-calibration_phase=0.126
+calibration_phase=0.131
 qb_simulation.calibration_phase=calibration_phase
-qb_simulation.ideal_phonon_fock(0)
+qb_simulation.generate_fock_state(2)
 qb_simulation.wigner_measurement_1D(param_drive,starkshift_param,steps=40,
 phase_calibration=False,if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
-
-# %%
-calibration_phase=0.126
-qb_simulation.calibration_phase=calibration_phase
-qb_simulation.generate_fock_state(0)
-fock_0_wigner_data=qb_simulation.wigner_measurement_2D(param_drive,starkshift_param,steps=40,
-if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
-
+np.save('simulated_data//cut_fock1.npy',qb_simulation.y_array)
+#%%
+x_simulated=qb_simulation.x_array
+y_simulated=qb_simulation.y_array*2-1
+x_ideal=np.linspace(-2,2,40)
+y_ideal=qt.wigner(qt.fock(10,2),x_ideal,[0])[0]*np.pi/2
+x_measurement=np.linspace(-0.06,0.06,40)*32.1/0.9
+y_measurement=np.load('wigner_data//fock_{}_measured_data.npy'.format(2))[20]/4
+#%%
+fig, ax=plt.subplots(figsize=(8,6))
+ax.plot(x_ideal,y_ideal,label='ideal')
+ax.plot(x_simulated,y_simulated,label='simulated')
+ax.plot(x_measurement,y_measurement,label='measurement')
+plt.legend()
+fig.show()
 # %%
 #calibrate the relation between phase and time
 phase_list=[]
@@ -180,86 +201,17 @@ calibration_phases=calibration_phase_list,if_echo=True,first_pulse_phases=[0,np.
 # %%
 #plot 2D wigner
 wigner_data_list=[]
-for phase in [1.86+np.pi/2]:
-    param_drive={'Omega':0.5,
-    'sigma':0.5,
-    'duration':10,
-    'rotate_direction':0,
-    'detuning':-qubit_phonon_detuning
-    }
+for fock_number in [1]:
+    print(param_drive)
     starkshift_param={'detuning':interaction_1_freq-phonon_freq,
                 'duration':7.05}
-    calibration_phase=0.126
+    calibration_phase=0.7378
     qb_simulation.calibration_phase=calibration_phase
-    qb_simulation.generate_fock_state(0.5,direction_phase=phase)
+    qb_simulation.generate_fock_state(fock_number)
     wigner_data=qb_simulation.wigner_measurement_2D(param_drive,starkshift_param,steps=40,
     if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
     wigner_data_list.append(qb_simulation.y_array)
-    np.save('simulated_data//fock_{}_wigner_v2.npy'.format(0.5),wigner_data)
+    np.save('simulated_data//fock_{}_wigner_v3.npy'.format(fock_number),wigner_data)
+
 
 # %%
-#calibrate probe amplitude for qubit spec
-param_probe={'Omega':0.015,
-    'sigma': 0.5,
-    'duration':15,
-    'amplitude_starkshift':0}
-
-y_list=[]
-sweep_list=np.linspace(0.005,0.04,10)
-for sweep_data in sweep_list:
-    param_probe['Omega']=sweep_data
-    param_probe['duration']=15
-    qb_simulation.ideal_phonon_fock(0)
-    param_probe['amplitude_starkshift']=interaction_1_freq-qubit_freq
-    qb_simulation.detuning_list=np.linspace(
-        param_probe['amplitude_starkshift']-0.2,
-        param_probe['amplitude_starkshift']+0.2,41)
-    qb_simulation.spec_measurement(param_probe)
-    y_list.append(qb_simulation.y_array)
-
-figure,ax = plt.subplots(figsize=(8,6))
-for i,sweep_data in enumerate(sweep_list):
-    ax.plot(qb_simulation.detuning_list ,y_list[i],label='probe omega={}MHz'.format(sweep_data))
-figure.legend()
-figure.show()
-# %%
-# calibrating the relation between alpha from density matrix and number splitting.
-param_probe={'Omega':0.017,
-    'sigma': 0.5,
-    'duration':13,
-    'amplitude_starkshift':0}
-param_drive={'Omega':0.2,
-    'sigma':0.5,
-    'duration':10,
-    'rotate_direction':0,
-    'detuning':-qubit_phonon_detuning
-    }
-density_matrix_alpha_list=[]
-fit_alpha_list=[]
-peak_position=[]
-for i in range(10):
-    peak_position.append(2.849-0.096*i)
-
-for n,drive_amplitude in enumerate(np.linspace(0.1,0.6,6)):
-    param_drive['Omega']=drive_amplitude
-    qb_simulation.generate_coherent_state(param_drive)
-    qb_simulation.fit_wigner()
-    density_matrix_alpha_list.append(qb_simulation.alpha)
-
-    param_probe['amplitude_starkshift']=interaction_3_freq-qubit_freq
-    qb_simulation.detuning_list=np.linspace(
-        param_probe['amplitude_starkshift']-1,
-        param_probe['amplitude_starkshift']+0.2,201)
-    qb_simulation.spec_measurement(param_probe)
-    result=qb_simulation.fitter.sum_lorentz_fit(peak_position,2+int(n*1.2))
-    fit_alpha_list.append(result[-1])
-# %%
-density_matrix_alpha_list=np.array(density_matrix_alpha_list)
-density_matrix_alpha_list=np.abs(density_matrix_alpha_list)
-plt.plot(density_matrix_alpha_list,fit_alpha_list,label='data')
-plt.xlabel('alpha from density matrix')
-linear_result=np.polyfit(density_matrix_alpha_list,fit_alpha_list,1)
-plt.ylabel('alpha from number splitting')
-plt.plot(density_matrix_alpha_list,linear_result[0]*density_matrix_alpha_list+linear_result[1],label='fit')
-plt.legend()
-

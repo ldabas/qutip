@@ -194,7 +194,7 @@ class Simulation():
         i=0
         for t in tqdm(self.x_array):
             circuit = QubitCircuit((self.processor.N))
-            # circuit.add_gate("X_R", targets=0) because we change the naming way of phonon rabi
+            circuit.add_gate("X_R", targets=0) #because we change the naming way of phonon rabi
             circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':t,'detuning':detuning})
             self.post_process(circuit,i)
             i=i+1
@@ -300,7 +300,7 @@ class Simulation():
         self.fit_wigner()
         axis=np.linspace(-np.abs(self.alpha),np.abs(self.alpha),steps)
         self.initial_state=deepcopy(stored_initial_state)
-        Omega_alpha_ratio=self.phonon_drive_params['Omega']/self.alpha
+        Omega_alpha_ratio=self.phonon_drive_params['Omega']/np.abs(self.alpha)
         self.x_array=axis
         self.set_up_1D_experiment(title='wigner measurement',xlabel='alpha')
         if if_echo:
@@ -357,7 +357,7 @@ class Simulation():
                         circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param_2)
                         circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
                             'rotate_direction':self.calibration_phase+first_phase})
-                        self.post_process(circuit,i,len(first_pulse_phases))
+                        self.post_process(circuit,i,average_num=len(first_pulse_phases))
                         i=i+1
 
                 else:
@@ -404,7 +404,7 @@ class Simulation():
                     circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':y,'detuning':-detuning})
                     circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
                         'rotate_direction':calibration_phases[int(i/len(first_pulse_phases))]+first_phase})
-                    self.post_process(circuit,i,len(first_pulse_phases))
+                    self.post_process(circuit,i,average_num=len(first_pulse_phases))
                     i=i+1
 
             else:
@@ -430,7 +430,7 @@ class Simulation():
         self.fit_wigner()
         axis=np.linspace(-np.abs(self.alpha),np.abs(self.alpha),steps)
         self.initial_state=deepcopy(stored_initial_state)
-        Omega_alpha_ratio=self.phonon_drive_params['Omega']/self.alpha
+        Omega_alpha_ratio=self.phonon_drive_params['Omega']/np.abs(self.alpha)
         storage_list_2D=[]
 
         if if_echo:
@@ -463,7 +463,7 @@ class Simulation():
                         circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param_2)
                         circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
                             'rotate_direction':self.calibration_phase+first_phase})
-                        self.post_process(circuit,i,len(first_pulse_phases))
+                        self.post_process(circuit,i,average_num=len(first_pulse_phases))
                         i=i+1
                 else:
                     circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})#first half pi pulse

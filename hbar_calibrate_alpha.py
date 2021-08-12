@@ -1,9 +1,9 @@
-#%%
+# %%
 from copy import deepcopy
 import enum
 from re import T
 from numpy.core.function_base import linspace
-from numpy.testing._private.utils import measure
+import scipy
 from scipy.ndimage.measurements import label
 from scipy.sparse import data
 from qutip.visualization import plot_fock_distribution
@@ -28,7 +28,7 @@ reload(hbar_fitting)
 #qubit dimission, we only consider g and e states here
 qubit_dim=2
 #phonon dimission
-phonon_dim=15
+phonon_dim=10
 #how many phonon modes we consider here
 phonon_num=1
 #the frequency difference between qubit and phonon (qubit minus phonon)
@@ -45,16 +45,12 @@ t1=[13]+[81]*(phonon_num)
 #T2 list of the system 104
 t2=[12.4]+[134]*(phonon_num)
 #pi time list for different fock state
-pi_time_list=[0.9616075295292871,
- 0.6799131117266513,
- 0.5551799620639973,
- 0.4808137005549264,
- 0.4301277653668094,
- 0.3928772171874855,
- 0.3641189085741248,
- 0.3409357557557456]
+pi_time_list=[0.9616123677058709,
+ 0.679329038657111,
+ 0.5548147810734809,
+ 0.48027408123596266]
 #set up the processor and compiler,qb5d97 is the qubit we play around
-qb_processor=hbar_processor.HBAR_processor((phonon_num+1),t1,t2,dims,g=[0.27],\
+qb_processor=hbar_processor.HBAR_processor((phonon_num+1),t1,t2,dims,g=[0.26],\
     rest_place=qubit_phonon_detuning,FSR=13)
 
 qb_compiler = hbar_compiler.HBAR_Compiler(qb_processor.num_qubits,\
@@ -62,67 +58,6 @@ qb_compiler = hbar_compiler.HBAR_Compiler(qb_processor.num_qubits,\
 
 qb_simulation=hbar_simulation_class.Simulation(qb_processor,qb_compiler)
 qb_simulation.swap_time_list=pi_time_list
-#%%
-qb_simulation.generate_fock_state(7)
-qb_simulation.plot_phonon_wigner()
-# %%
-'''
-For higher order phonon rabi
-'''
-ydata_2D_list=[]
-pi_time_list=[]
-for n in range(9):
-    qb_simulation.t_list=np.linspace(0.01,8,150)
-    qb_simulation.generate_fock_state(n)
-    qb_simulation.phonon_rabi_measurement()  
-    # pi_time_list.append(qb_simulation.fit_result[-1]['swap_time'])
-    # qb_simulation.swap_time_list=pi_time_list
-    ydata_2D_list.append(qb_simulation.y_array)
-# pi_time_list.pop(0)
-# %%
-ydata_2D_list=np.array(ydata_2D_list)
-np.save('simulated_data//generated_fock_state_phonon_rabi.npy',ydata_2D_list)
-np.save('simulated_data//generated_fock_state_phonon_rabi_t_list.npy',qb_simulation.x_array)
-#%%
-ydata_2D_list=np.load('simulated_data//ideal_fock_state_phonon_rabi.npy')
-# %%
-qb_simulation.t_list=np.linspace(0.01,10,150)
-qb_simulation.generate_fock_state(3)
-qb_simulation.plot_phonon_wigner()
-qb_simulation.phonon_rabi_measurement()  
-Measurement_data=qb_simulation.y_array
-
-
-# %%
-#check page for least square method with matrix 
-#(English)  https://en.wikipedia.org/wiki/Ordinary_least_squares 
-#(Chinese)  https://zh.wikipedia.org/wiki/%E6%9C%80%E5%B0%8F%E4%BA%8C%E4%B9%98%E6%B3%95
-fitted_population=np.linalg.pinv(ydata_2D_list.transpose()).dot( Measurement_data.transpose())
-plt.plot(fitted_population,drawstyle= 'steps-mid')
-
-# %%
-figure, ax= plt.subplots(figsize=(8,6))
-fitted=fitted_population.dot(ydata_2D_list)
-measured=qb_simulation.y_array
-t=qb_simulation.x_array
-ax.plot(t,fitted,label='fitted')
-ax.plot(t,measured,label='simulated')
-plt.legend()
-figure.show()
-
-# %%
-qt.plot_wigner(qt.fock(10,2),alpha_max=1.6,cmap='seismic')
-
-#%%
-figure, ax= plt.subplots(figsize=(8,6))
-fitted=fitted_population.dot(ydata_2D_list)
-measured=qb_simulation.y_array
-t=qb_simulation.x_array
-for i, y in enumerate(ydata_2D_list):
-    ax.plot(t,y,label='ideal fock{}'.format(i))
-
-plt.legend()
-figure.show()
 
 # %%
 #calibrate probe amplitude for qubit spec
@@ -149,6 +84,7 @@ for i,sweep_data in enumerate(sweep_list):
     ax.plot(qb_simulation.detuning_list ,y_list[i],label='probe omega={}MHz'.format(sweep_data))
 figure.legend()
 figure.show()
+
 # %%
 # calibrating the relation between alpha from density matrix and number splitting.
 param_probe={'Omega':0.017,
@@ -180,6 +116,7 @@ for n,drive_amplitude in enumerate(np.linspace(0.1,0.6,6)):
     qb_simulation.spec_measurement(param_probe)
     result=qb_simulation.fitter.sum_lorentz_fit(peak_position,2+int(n*1.2))
     fit_alpha_list.append(result[-1])
+
 # %%
 density_matrix_alpha_list=np.array(density_matrix_alpha_list)
 density_matrix_alpha_list=np.abs(density_matrix_alpha_list)
@@ -189,5 +126,48 @@ linear_result=np.polyfit(density_matrix_alpha_list,fit_alpha_list,1)
 plt.ylabel('alpha from number splitting')
 plt.plot(density_matrix_alpha_list,linear_result[0]*density_matrix_alpha_list+linear_result[1],label='fit')
 plt.legend()
+
 # %%
-ydata_2D_list.
+#load simulated fock state data
+simulate_data_list=[]
+for i in [0,1,2,0.5]:
+    data_fock=np.load('simulated_data//fock_{}_wigner.npy'.format(i))
+    simulate_data_list.append(data_fock)
+data_axis=np.load('simulated_data//axis.npy')
+
+#load measured data
+measured_data_list=[]
+for i in [0,1,2,0.5]:
+    data_fock=np.load('wigner_data//fock_{}_measured_data.npy'.format(i))
+    measured_data_list.append(data_fock)
+data_axis=np.linspace(-32*0.06,32*0.06,40)
+
+# %%
+fock_number=0
+def fock_fit(x):
+    ratio,normalize=x
+    data_type='measurement'
+    data_ideal=normalize*qt.wigner(qt.fock(10,fock_number),ratio*data_axis,ratio*data_axis)
+    if data_type=='simulation':#simulation data
+        data_be_fitted=simulate_data_list[fock_number]
+    if data_type=='measurement':
+        data_be_fitted=measured_data_list[fock_number]/4
+    residual=np.sum(np.square(data_be_fitted-data_ideal))
+    return residual
+minimize_result=scipy.optimize.minimize(fock_fit,(1,1),bounds=[(0.8,2),(0.3,3)])
+# %%
+factor_ratio,normalize=minimize_result['x']
+xx,yy=np.meshgrid(data_axis,data_axis)
+fig, (ax1,ax2) = plt.subplots(1, 2, figsize=(6,6))
+data_ideal=normalize * qt.wigner(qt.fock(10,fock_number),factor_ratio*data_axis,factor_ratio*data_axis)
+im1 = ax1.pcolormesh(yy,xx, data_ideal, cmap='seismic',vmin=-1, vmax=1)
+im2 = ax2.pcolormesh(yy,xx, measured_data_list[fock_number]/4, cmap='seismic',vmin=-1, vmax=1)
+ax1.axis('equal')
+ax2.axis('equal')
+fig.legend()
+fig.show()
+# %%
+factor_ratio
+# %%
+qt.plot_wigner(fock(5,0),alpha_max=2.1,cmap='seismic')
+# %%
