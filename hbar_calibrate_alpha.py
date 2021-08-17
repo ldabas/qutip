@@ -40,10 +40,9 @@ qubit_phonon_detuning=qubit_freq-phonon_freq
 
 #dimission of the system, qubit dimission + phonons dimission
 dims=[qubit_dim]+[phonon_dim]*phonon_num
-#T1 list of the system 77
-t1=[13]+[81]*(phonon_num)
-#T2 list of the system 104
-t2=[12.4]+[134]*(phonon_num)
+#T1 T2 is the average number of the two interaction point
+t1=[(13.1+9.7)/2]+[81]*(phonon_num)
+t2=[(9.8+10.1)/2]+[134]*(phonon_num)
 #pi time list for different fock state
 pi_time_list=[0.9616123677058709,
  0.679329038657111,
@@ -167,7 +166,5 @@ ax2.axis('equal')
 fig.legend()
 fig.show()
 # %%
-factor_ratio
-# %%
-qt.plot_wigner(fock(5,0),alpha_max=2.1,cmap='seismic')
-# %%
+data_fock=np.load('simulated_data//fock_{}_wigner_v3.npy'.format(0))
+

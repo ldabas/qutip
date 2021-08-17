@@ -121,7 +121,7 @@ class Simulation():
             circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':swap_t,'detuning':detuning})
         else:
             for swap_t in self.swap_time_list[:fock_number]:
-                circuit.add_gate("X_R", targets=0)
+                circuit.add_gate("X_R", targets=0,arg_value={'rotate_direction':direction_phase})
                 circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':swap_t,'detuning':detuning})
         if fock_number!=0:
             self.initial_state=self.run_circuit(circuit)

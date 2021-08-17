@@ -27,7 +27,7 @@ reload(hbar_fitting)
 #qubit dimission, we only consider g and e states here
 qubit_dim=2
 #phonon dimission
-phonon_dim=17
+phonon_dim=10
 #how many phonon modes we consider here
 phonon_num=1
 #the frequency difference between qubit and phonon (qubit minus phonon)
@@ -39,10 +39,9 @@ qubit_phonon_detuning=qubit_freq-phonon_freq
 
 #dimission of the system, qubit dimission + phonons dimission
 dims=[qubit_dim]+[phonon_dim]*phonon_num
-#T1 list of the system 77
-t1=[13]+[81]*(phonon_num)
-#T2 list of the system 104
-t2=[12.4]+[134]*(phonon_num)
+#T1 T2 is the average number of the two interaction point
+t1=[(13.1+9.7)/2]+[81]*(phonon_num)
+t2=[(9.8+10.1)/2]+[134]*(phonon_num)
 #pi time list for different fock state
 pi_time_list=[0.9616123677058709,
  0.679329038657111,
@@ -142,7 +141,7 @@ qb_simulation.spec_measurement(param_probe,readout_type='read phonon')
 
 #%%
 #try find a good driving amplitude
-param_drive={'Omega':0.52,
+param_drive={'Omega':0.52/1.5,
     'sigma':0.5,
     'duration':12,
     'rotate_direction':np.pi,
@@ -154,10 +153,6 @@ starkshift_param={'detuning':interaction_1_freq-phonon_freq,
                 'duration':7}
 abs(qb_simulation.alpha)
 
-#%% phase calibration
-qb_simulation.wigner_measurement_1D(param_drive,starkshift_param,steps=30,
-phase_calibration=True,if_echo=True)
-
 #%%
 #wigner 1D
 calibration_phase=0.131
@@ -165,15 +160,16 @@ qb_simulation.calibration_phase=calibration_phase
 qb_simulation.generate_fock_state(2)
 qb_simulation.wigner_measurement_1D(param_drive,starkshift_param,steps=40,
 phase_calibration=False,if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
-np.save('simulated_data//cut_fock1.npy',qb_simulation.y_array)
+# np.save('simulated_data//cut_fock1.npy',qb_simulation.y_array)
 #%%
-x_simulated=qb_simulation.x_array
-y_simulated=qb_simulation.y_array*2-1
+#load measurement data and plot together
+x_simulated=np.load('simulated_data//axis_v3.npy')
+y_simulated=np.load('simulated_data//fock_{}_wigner_v3.npy'.format(2))[20]
 x_ideal=np.linspace(-2,2,40)
-y_ideal=qt.wigner(qt.fock(10,2),x_ideal,[0])[0]*np.pi/2
+y_ideal=qt.wigner(qt.fock(10,0),x_ideal,[0])[0]*np.pi/2
 x_measurement=np.linspace(-0.06,0.06,40)*32.1/0.9
 y_measurement=np.load('wigner_data//fock_{}_measured_data.npy'.format(2))[20]/4
-#%%
+
 fig, ax=plt.subplots(figsize=(8,6))
 ax.plot(x_ideal,y_ideal,label='ideal')
 ax.plot(x_simulated,y_simulated,label='simulated')
@@ -191,27 +187,51 @@ for time in time_list:
     phase_calibration=True,if_echo=True)
     phase_list.append(qb_simulation.fit_result[-1]['phi'])
 phase_fit=np.polyfit(time_list,phase_list,1)
-duration_list=np.linspace(7,7.2,30)
+duration_list=np.linspace(7,7.3,30)
 calibration_phase_list=phase_fit[0]*duration_list+phase_fit[1]
 # %%
 #calibrate the wigner background with time
-qb_simulation.generate_fock_state(1)
+qb_simulation.generate_fock_state(2) 
 qb_simulation.wigner_measurement_time_calibrate(param_drive,duration_list,interaction_1_freq-phonon_freq,
 calibration_phases=calibration_phase_list,if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
+fig, ax=plt.subplots(figsize=(8,6))
+ax.plot(qb_simulation.x_array,qb_simulation.y_array)
+ax.plot([7,7.3],[0.5,0.5])
+fig.show()
 # %%
 #plot 2D wigner
 wigner_data_list=[]
-for fock_number in [1]:
+for fock_number in [2]:
     print(param_drive)
     starkshift_param={'detuning':interaction_1_freq-phonon_freq,
-                'duration':7.05}
-    calibration_phase=0.7378
+                'duration':7.075}
+    calibration_phase=phase_fit[0]*starkshift_param['duration']+phase_fit[1]
     qb_simulation.calibration_phase=calibration_phase
-    qb_simulation.generate_fock_state(fock_number)
-    wigner_data=qb_simulation.wigner_measurement_2D(param_drive,starkshift_param,steps=40,
+    qb_simulation.generate_fock_state(fock_number,np.pi/4)
+    wigner_data=qb_simulation.wigner_measurement_2D(param_drive,starkshift_param,steps=20,
     if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
     wigner_data_list.append(qb_simulation.y_array)
-    np.save('simulated_data//fock_{}_wigner_v3.npy'.format(fock_number),wigner_data)
+    np.save('simulated_data//fock_{}_wigner_v6.npy'.format(fock_number),wigner_data)
 
 
+# %%
+data_list=[]
+phase_list=np.linspace(3.2,3.7,10)
+starkshift_param={'detuning':interaction_1_freq-phonon_freq,
+                'duration':7}
+calibration_phase=0.131
+qb_simulation.calibration_phase=calibration_phase
+for phase in phase_list:
+    qb_simulation.generate_fock_state(0.5,phase)
+    qb_simulation.wigner_measurement_1D(param_drive,starkshift_param,steps=40,
+phase_calibration=False,if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
+    data_list.append(qb_simulation.y_array)
+# %%
+fig, ax=plt.subplots(figsize=(8,6))
+
+for i,phase in enumerate(phase_list):
+    ax.plot(qb_simulation.x_array,data_list[i],label=phase)
+plt.legend()
+
+fig.show()
 # %%
