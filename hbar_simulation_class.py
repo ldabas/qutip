@@ -119,10 +119,12 @@ class Simulation():
             'rotate_direction':direction_phase})
             swap_t=self.swap_time_list[0]
             circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':swap_t,'detuning':detuning})
+            circuit.add_gate('Wait',targets=0,arg_value=0.02)# this wait just for match with the experiment
         else:
             for swap_t in self.swap_time_list[:fock_number]:
                 circuit.add_gate("X_R", targets=0,arg_value={'rotate_direction':direction_phase})
                 circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':swap_t,'detuning':detuning})
+                circuit.add_gate('Wait',targets=0,arg_value=0.02)# this wait just for match with the experiment
         if fock_number!=0:
             self.initial_state=self.run_circuit(circuit)
         if fock_number!=0.5:
@@ -182,9 +184,33 @@ class Simulation():
             i=i+1
         self.fitter=hbar_fitting.fitter(self.x_array,self.y_array)
         self.fit_result.append(self.fitter.fit_T1())
+    def phonon_ramsey_measurement(self,artificial_detuning=None,if_fit=True):
+        '''
+        This is for phonon ramsey measurement.
+        do a qubit half pi pulse first, then wait, and another half pi pulse. 
+        At the waiting time, we can also shift qubit to interaction point
+        '''
 
+        self.x_array=self.t_list
+        self.set_up_1D_experiment(title='qubit Ramsey')
+        if not(artificial_detuning==None):
+            self.artificial_detuning=artificial_detuning
+        i=0
+        for t in tqdm(self.x_array):
+            circuit = QubitCircuit((self.processor.N))
+            circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})
+            circuit.add_gate('swap',targets=[0,1])
+            circuit.add_gate('Wait',targets=0,arg_value=t)
+            circuit.add_gate('swap',targets=[0,1])
+            circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
+                'rotate_direction':2*np.pi*self.artificial_detuning*t})
+            self.post_process(circuit,i)
+            i=i+1
+        if if_fit:
+            self.fitter=hbar_fitting.fitter(self.x_array,self.y_array)
+            self.fit_result.append(self.fitter.fit_T2())
 
-    def phonon_rabi_measurement(self,detuning=0):
+    def phonon_rabi_measurement(self,detuning=0,if_fit=1):
         '''
         simulation for qubit phonon rabi oscillation.
         We excite qubit first, then put qubit and phonon on resonance. Sweeping resonance time and readout
@@ -198,8 +224,9 @@ class Simulation():
             circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':t,'detuning':detuning})
             self.post_process(circuit,i)
             i=i+1
-        self.fitter=hbar_fitting.fitter(self.x_array,self.y_array)
-        self.fit_result.append(self.fitter.fit_phonon_rabi())
+        if if_fit:
+            self.fitter=hbar_fitting.fitter(self.x_array,self.y_array)
+            self.fit_result.append(self.fitter.fit_phonon_rabi())
 
     def qubit_rabi_measurement(self,qubit_probe_params={}):
         '''
@@ -450,6 +477,7 @@ class Simulation():
                 self.initial_state=deepcopy(stored_initial_state)
                 self.phonon_drive_params['Omega']=np.sqrt(x**2+y**2)*Omega_alpha_ratio
                 self.phonon_drive_params['rotate_direction']=np.angle(x+1j*y)+0.5*np.pi
+                circuit.add_gate('Wait',targets=0,arg_value=0.02)# this wait just for match with the experiment
                 circuit.add_gate("XY_R_GB", targets=0,arg_value=self.phonon_drive_params)#phonon displacement
                 self.initial_state=self.run_circuit(circuit)
                 if if_echo:
@@ -473,8 +501,17 @@ class Simulation():
                     self.post_process(circuit,i)
                     i=i+1
             storage_list_2D.append(self.y_array*2-1)
-
-        xx,yy=np.meshgrid(axis,axis)
+            
+        def axis_for_mesh(axis):
+            begin=axis[0]
+            end=axis[-1]
+            length=len(axis)
+            step=axis[1]-axis[0]
+            begin=begin-step/2
+            end=end+step/2
+            length=length+1
+            return np.linspace(begin,end,length)
+        xx,yy=np.meshgrid(axis_for_mesh(axis),axis_for_mesh(axis))
         fig, ax1, = plt.subplots(1, 1, figsize=(6,6))
         im = ax1.pcolormesh(yy,xx, storage_list_2D, cmap='seismic',vmin=-1, vmax=1)
         fig.colorbar(im)

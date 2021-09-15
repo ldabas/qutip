@@ -87,11 +87,11 @@ def gauss_rx_rz_compiler(gate, args):
 
 def swap_phonon_compiler(gate, args):
     """
-    Compiler for the X-axis_Rotate gate
+    Compiler for the z-axis_Rotate gate
     """
     targets = gate.targets  # target qubit
     parameters = args["params"]
-    g= parameters["g"]  # find the coupling strength for the target qubit
+    g= parameters["g"] [targets[-1]-1] # find the coupling strength for the target qubit
     gate_sigma =0.01
     amplitude =parameters['phonon_omega_z'][targets[1]-1]
     duration = 1/g/4*2*np.pi

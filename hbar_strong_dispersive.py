@@ -2,6 +2,7 @@
 from copy import deepcopy
 import enum
 from re import T
+from numpy.core.defchararray import mod
 from numpy.core.function_base import linspace
 from scipy.ndimage.measurements import label
 from scipy.sparse import data
@@ -32,7 +33,7 @@ phonon_dim=10
 phonon_num=1
 #the frequency difference between qubit and phonon (qubit minus phonon)
 qubit_freq=5970.04
-phonon_freq=5974.115
+phonon_freq=5974.11577
 interaction_1_freq=5972.2
 interaction_3_freq=5972.95
 qubit_phonon_detuning=qubit_freq-phonon_freq
@@ -47,6 +48,7 @@ pi_time_list=[0.9616123677058709,
  0.679329038657111,
  0.5548147810734809,
  0.48027408123596266]
+pi_time_list=[0.899+0.08,0.623+0.08,0.525+0.08]
 #set up the processor and compiler,qb5d97 is the qubit we play around
 #Omega=50 because we use width of pi pulse as 20ns
 qb_processor=hbar_processor.HBAR_processor((phonon_num+1),t1,t2,dims, Omega=50/(2*np.pi),g=[0.26],\
@@ -141,7 +143,7 @@ qb_simulation.spec_measurement(param_probe,readout_type='read phonon')
 
 #%%
 #try find a good driving amplitude
-param_drive={'Omega':0.52/1.5,
+param_drive={'Omega':0.52/1.8,
     'sigma':0.5,
     'duration':12,
     'rotate_direction':np.pi,
@@ -152,6 +154,26 @@ qb_simulation.fit_wigner()
 starkshift_param={'detuning':interaction_1_freq-phonon_freq,
                 'duration':7}
 abs(qb_simulation.alpha)
+#%%
+drive_amp_list=np.linspace(0.01,0.5,10)
+alpha_list=[]
+for drive_amp in drive_amp_list:
+    param_drive={'Omega':drive_amp,
+    'sigma':0.5,
+    'duration':12,
+    'rotate_direction':np.pi,
+    'detuning':-qubit_phonon_detuning
+    }
+    qb_simulation.generate_coherent_state(param_drive)
+    qb_simulation.fit_wigner()
+    alpha_list.append( abs(qb_simulation.alpha))
+
+fig, ax=plt.subplots(figsize=(8,6))
+ax.plot(drive_amp_list,alpha_list)
+ax.set_xlabel('drive amp')
+ax.set_ylabel('fitted alpha')
+plt.legend()
+fig.show()
 
 #%%
 #wigner 1D
@@ -201,37 +223,51 @@ fig.show()
 # %%
 #plot 2D wigner
 wigner_data_list=[]
-for fock_number in [2]:
+phase_fit=[ 12.14661223, -84.90036848]
+parity_time_list=[7.075]
+fock_number_list=[2]
+for i,fock_number in enumerate(fock_number_list):
     print(param_drive)
     starkshift_param={'detuning':interaction_1_freq-phonon_freq,
-                'duration':7.075}
+                'duration':parity_time_list[i]}
     calibration_phase=phase_fit[0]*starkshift_param['duration']+phase_fit[1]
     qb_simulation.calibration_phase=calibration_phase
-    qb_simulation.generate_fock_state(fock_number,np.pi/4)
-    wigner_data=qb_simulation.wigner_measurement_2D(param_drive,starkshift_param,steps=20,
+    # qb_simulation.generate_fock_state(fock_number,0.85)
+    qb_simulation.generate_fock_state(fock_number,direction_phase=1.32)
+    wigner_data=qb_simulation.wigner_measurement_2D(param_drive,starkshift_param,steps=15,
     if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
     wigner_data_list.append(qb_simulation.y_array)
-    np.save('simulated_data//fock_{}_wigner_v6.npy'.format(fock_number),wigner_data)
+    # np.save('simulated_data//fock_{}_wigner_v9.npy'.format(fock_number),wigner_data)
 
 
 # %%
+#phase calibration
+phase_fit=[ 12.14661223, -84.90036848]
 data_list=[]
-phase_list=np.linspace(3.2,3.7,10)
+phase_list=np.linspace(0,np.pi/2,10)
 starkshift_param={'detuning':interaction_1_freq-phonon_freq,
-                'duration':7}
-calibration_phase=0.131
+                'duration':7.075}
+calibration_phase=1.03
 qb_simulation.calibration_phase=calibration_phase
 for phase in phase_list:
-    qb_simulation.generate_fock_state(0.5,phase)
-    qb_simulation.wigner_measurement_1D(param_drive,starkshift_param,steps=40,
+    qb_simulation.generate_fock_state(2,phase)
+    qb_simulation.wigner_measurement_1D(param_drive,starkshift_param,steps=20,
 phase_calibration=False,if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
     data_list.append(qb_simulation.y_array)
-# %%
-fig, ax=plt.subplots(figsize=(8,6))
 
+fig, ax=plt.subplots(figsize=(8,6))
 for i,phase in enumerate(phase_list):
     ax.plot(qb_simulation.x_array,data_list[i],label=phase)
 plt.legend()
 
 fig.show()
+
+
 # %%
+swap_time_list=[0.899+0.08,0.623+0.08,0.525+0.08]
+phase_0d5=qubit_phonon_detuning*(120.17+0.08+(0.899+0.08)+0.04)*np.pi*2
+phase_2=qubit_phonon_detuning*(120.17+0.08+(0.899+0.08)+0.02+(0.623+0.08)+0.04)*np.pi*2
+def mode_phase(phase):
+    return phase-int(phase/(np.pi*2))*(np.pi*2)
+
+
