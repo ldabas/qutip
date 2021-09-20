@@ -155,7 +155,7 @@ class Simulation():
         simulation of qubit T1 
         '''
         self.x_array=self.t_list
-        self.set_up_1D_experiment(title='phonon T1')
+        self.set_up_1D_experiment(title='qubit T1')
         i=0
         for t in tqdm(self.x_array):
             circuit = QubitCircuit((self.processor.N))
@@ -388,12 +388,15 @@ class Simulation():
                         i=i+1
 
                 else:
-                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})
-                    circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param)
-                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
-                        'rotate_direction':self.calibration_phase})
-                    self.post_process(circuit,i)
-                    i=i+1
+                    for first_phase in first_pulse_phases:
+                        circuit = QubitCircuit((self.processor.N))
+                        circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,
+                        'rotate_direction':first_phase})
+                        circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param)
+                        circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
+                            'rotate_direction':self.calibration_phase+first_phase})
+                        self.post_process(circuit,i,average_num=len(first_pulse_phases))
+                        i=i+1
     def wigner_measurement_time_calibrate(self,
                              phonon_drive_params,
                              durations,
@@ -425,22 +428,25 @@ class Simulation():
                     circuit = QubitCircuit((self.processor.N))
                     circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,
                     'rotate_direction':first_phase})
-                    circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':y,'detuning':detuning})
+                    circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':y/2,'detuning':detuning})
                     circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi,
                     'rotate_direction':first_phase})
-                    circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':y,'detuning':-detuning})
+                    circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':y/2,'detuning':-detuning})
                     circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
                         'rotate_direction':calibration_phases[int(i/len(first_pulse_phases))]+first_phase})
                     self.post_process(circuit,i,average_num=len(first_pulse_phases))
                     i=i+1
 
             else:
-                circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})
-                circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param)
-                circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
-                    'rotate_direction':self.calibration_phase})
-                self.post_process(circuit,i)
-                i=i+1          
+                for first_phase in first_pulse_phases:
+                    circuit = QubitCircuit((self.processor.N))
+                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,
+                    'rotate_direction':first_phase})
+                    circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':y,'detuning':detuning})
+                    circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
+                        'rotate_direction':calibration_phases[int(i/len(first_pulse_phases))]+first_phase})
+                    self.post_process(circuit,i,average_num=len(first_pulse_phases))
+                    i=i+1
 
     def wigner_measurement_2D(self,
                             phonon_drive_params,

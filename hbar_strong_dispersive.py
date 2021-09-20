@@ -143,7 +143,7 @@ qb_simulation.spec_measurement(param_probe,readout_type='read phonon')
 
 #%%
 #try find a good driving amplitude
-param_drive={'Omega':0.52/1.8,
+param_drive={'Omega':0.52,
     'sigma':0.5,
     'duration':12,
     'rotate_direction':np.pi,
@@ -209,17 +209,21 @@ for time in time_list:
     phase_calibration=True,if_echo=True)
     phase_list.append(qb_simulation.fit_result[-1]['phi'])
 phase_fit=np.polyfit(time_list,phase_list,1)
-duration_list=np.linspace(7,7.3,30)
+#%%
+duration_list=np.linspace(7,8,30)
 calibration_phase_list=phase_fit[0]*duration_list+phase_fit[1]
 # %%
 #calibrate the wigner background with time
-qb_simulation.generate_fock_state(2) 
+qb_simulation.generate_fock_state(0) 
 qb_simulation.wigner_measurement_time_calibrate(param_drive,duration_list,interaction_1_freq-phonon_freq,
 calibration_phases=calibration_phase_list,if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
 fig, ax=plt.subplots(figsize=(8,6))
 ax.plot(qb_simulation.x_array,qb_simulation.y_array)
-ax.plot([7,7.3],[0.5,0.5])
+ax.plot([duration_list[0],duration_list[-1]],[0.5,0.5])
 fig.show()
+
+#%%
+qb_simulation.copied_processor.plot_pulses()
 # %%
 #plot 2D wigner
 wigner_data_list=[]
@@ -263,11 +267,5 @@ plt.legend()
 fig.show()
 
 
-# %%
-swap_time_list=[0.899+0.08,0.623+0.08,0.525+0.08]
-phase_0d5=qubit_phonon_detuning*(120.17+0.08+(0.899+0.08)+0.04)*np.pi*2
-phase_2=qubit_phonon_detuning*(120.17+0.08+(0.899+0.08)+0.02+(0.623+0.08)+0.04)*np.pi*2
-def mode_phase(phase):
-    return phase-int(phase/(np.pi*2))*(np.pi*2)
 
 
