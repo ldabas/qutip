@@ -4,10 +4,10 @@ from re import T
 from numpy.core.function_base import linspace
 from qutip.visualization import plot_fock_distribution
 from qutip.states import coherent
-import hbar_compiler
-import hbar_processor
-import hbar_simulation_class
-import hbar_fitting
+import HyQu_system_define.hbar_compiler as hbar_compiler
+import HyQu_system_define.hbar_processor as hbar_processor
+import HyQu_system_define.hbar_simulation_class as hbar_simulation_class
+import HyQu_system_define.hbar_fitting as hbar_fitting
 import numpy as np
 import matplotlib.pyplot as plt
 from importlib import reload
@@ -25,7 +25,7 @@ qubit_dim=2
 #phonon dimission
 phonon_dim=10
 #how many phonon modes we consider here
-phonon_num=1
+phonon_num=2
 #the frequency difference between qubit and phonon (qubit minus phonon)
 qubit_freq=5970.04
 phonon_freq=5974.115
@@ -38,10 +38,13 @@ dims=[qubit_dim]+[phonon_dim]*phonon_num
 t1=[10]+[77]*(phonon_num)
 #T2 list of the system 104
 t2=[15]+[104]*(phonon_num)
-
+#list of the coupling factor between qubit and each phonon mode.
+g=[0.26]*phonon_num
+#list of phonon frequency. We set the first phonon freq as 0. In the simulation, the phonon freq will be set as rest_place+phonon_feq_list
+phonon_freq_list=[0]+[13]*(phonon_num-1)
 #set up the processor and compiler,qb5d97 is the qubit we play around
-qb5d97_processor=hbar_processor.HBAR_processor((phonon_num+1),t1,t2,dims,g=[0.26],\
-    rest_place=qubit_phonon_detuning,FSR=13)
+qb5d97_processor=hbar_processor.HBAR_processor((phonon_num+1),t1,t2,dims,g=g,\
+    rest_place=qubit_phonon_detuning,phonon_freq_list=phonon_freq_list)
 
 qb5d97_compiler = hbar_compiler.HBAR_Compiler(qb5d97_processor.num_qubits,\
     qb5d97_processor.params, qb5d97_processor.pulse_dict)

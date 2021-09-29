@@ -28,9 +28,9 @@ reload(hbar_fitting)
 #qubit dimission, we only consider g and e states here
 qubit_dim=2
 #phonon dimission
-phonon_dim=10
+phonon_dim=20
 #how many phonon modes we consider here
-phonon_num=1
+phonon_num=2
 #the frequency difference between qubit and phonon (qubit minus phonon)
 qubit_freq=5970.04
 phonon_freq=5974.11577
@@ -39,7 +39,7 @@ interaction_3_freq=5972.95
 qubit_phonon_detuning=qubit_freq-phonon_freq
 
 #dimission of the system, qubit dimission + phonons dimission
-dims=[qubit_dim]+[phonon_dim]*phonon_num
+dims=[qubit_dim]+[phonon_dim]+[2]
 #T1 T2 is the average number of the two interaction point
 t1=[(13.1+9.7)/2]+[81]*(phonon_num)
 t2=[(9.8+10.1)/2]+[134]*(phonon_num)
@@ -51,8 +51,8 @@ pi_time_list=[0.9616123677058709,
 pi_time_list=[0.899+0.08,0.623+0.08,0.525+0.08]
 #set up the processor and compiler,qb5d97 is the qubit we play around
 #Omega=50 because we use width of pi pulse as 20ns
-qb_processor=hbar_processor.HBAR_processor((phonon_num+1),t1,t2,dims, Omega=50/(2*np.pi),g=[0.26],\
-    rest_place=qubit_phonon_detuning,FSR=13)
+qb_processor=hbar_processor.HBAR_processor((phonon_num+1),t1,t2,dims, Omega=50/(2*np.pi),g=[0.26,0.099],\
+    rest_place=qubit_phonon_detuning,FSR=1.1)
 
 qb_compiler = hbar_compiler.HBAR_Compiler(qb_processor.num_qubits,\
     qb_processor.params, qb_processor.pulse_dict)
@@ -60,7 +60,8 @@ qb_compiler = hbar_compiler.HBAR_Compiler(qb_processor.num_qubits,\
 qb_simulation=hbar_simulation_class.Simulation(qb_processor,qb_compiler)
 qb_simulation.swap_time_list=pi_time_list
 
-
+#%%
+qb_simulation.phonon_rabi_measurement(1.1)
 
 # %%
 '''
@@ -132,7 +133,9 @@ for qubit operation, pi_amp=0.64, width of the pi pulse is 20us
 '''
 Omega_drive=50/(2*np.pi)/2.49986*np.pi/2/0.64*0.06
 #%%
-#probe phonon, because qubit and phonon dispersive coupling, phonon frequency changed
+'''
+probe phonon, because qubit and phonon dispersive coupling, phonon frequency changed
+'''
 param_probe={'Omega':0.1,
     'sigma': 0.5,
     'duration':5,
@@ -142,7 +145,10 @@ qb_simulation.spec_measurement(param_probe,readout_type='read phonon')
 #the phonon frequency move to 4.0915MHz.
 
 #%%
-#try find a good driving amplitude
+'''
+try find a good driving amplitude
+'''
+
 param_drive={'Omega':0.52,
     'sigma':0.5,
     'duration':12,
@@ -155,6 +161,9 @@ starkshift_param={'detuning':interaction_1_freq-phonon_freq,
                 'duration':7}
 abs(qb_simulation.alpha)
 #%%
+'''
+see the linear relation between drive amplitude and generated alpha
+'''
 drive_amp_list=np.linspace(0.01,0.5,10)
 alpha_list=[]
 for drive_amp in drive_amp_list:
@@ -176,15 +185,20 @@ plt.legend()
 fig.show()
 
 #%%
-#wigner 1D
+'''
+test wigner 1D measurement
+'''
 calibration_phase=0.131
 qb_simulation.calibration_phase=calibration_phase
-qb_simulation.generate_fock_state(2)
-qb_simulation.wigner_measurement_1D(param_drive,starkshift_param,steps=40,
+qb_simulation.generate_fock_state(0)
+qb_simulation.wigner_measurement_1D(param_drive,starkshift_param,steps=9,
 phase_calibration=False,if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
 # np.save('simulated_data//cut_fock1.npy',qb_simulation.y_array)
 #%%
-#load measurement data and plot together
+'''
+load measurement data, 
+plot measurement, simulated and ideal together
+'''
 x_simulated=np.load('simulated_data//axis_v3.npy')
 y_simulated=np.load('simulated_data//fock_{}_wigner_v3.npy'.format(2))[20]
 x_ideal=np.linspace(-2,2,40)
@@ -199,7 +213,9 @@ ax.plot(x_measurement,y_measurement,label='measurement')
 plt.legend()
 fig.show()
 # %%
-#calibrate the relation between phase and time
+'''
+calibrate the relation between phase of second half pi pulse and time
+'''
 phase_list=[]
 time_list=[7,7.05,7.1]
 for time in time_list:
@@ -210,20 +226,71 @@ for time in time_list:
     phase_list.append(qb_simulation.fit_result[-1]['phi'])
 phase_fit=np.polyfit(time_list,phase_list,1)
 #%%
-duration_list=np.linspace(7,8,30)
+phase_fit
+#%%
+'''
+generate the list of phase for second half pi pulse
+'''
+
+# phase_fit=[ 12.14661223, -84.90036848]
+phase_fit=[12.15574521,-84.91190764]
+duration_list=np.linspace(6,8,50)
 calibration_phase_list=phase_fit[0]*duration_list+phase_fit[1]
+
 # %%
 #calibrate the wigner background with time
+
+param_drive={'Omega':0.7,
+'sigma':0.5,
+'duration':12,
+'rotate_direction':0,
+'detuning':-qubit_phonon_detuning
+}
 qb_simulation.generate_fock_state(0) 
-qb_simulation.wigner_measurement_time_calibrate(param_drive,duration_list,interaction_1_freq-phonon_freq,
-calibration_phases=calibration_phase_list,if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
+qb_simulation.wigner_measurement_time_calibrate(param_drive,duration_list,
+    interaction_1_freq-phonon_freq,
+    calibration_phases=calibration_phase_list,
+    if_echo=True,
+    first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
+
+#%%
 fig, ax=plt.subplots(figsize=(8,6))
-ax.plot(qb_simulation.x_array,qb_simulation.y_array)
+ax.plot(qb_simulation.x_array,y_container[0])
 ax.plot([duration_list[0],duration_list[-1]],[0.5,0.5])
 fig.show()
 
 #%%
-qb_simulation.copied_processor.plot_pulses()
+y_container=[]
+for i,duration in enumerate(duration_list):
+    qb_simulation.calibration_phase=calibration_phase_list[i]
+    qb_simulation.generate_fock_state(0)
+    starkshift_param={'detuning':interaction_1_freq-phonon_freq,
+                'duration':duration}
+    qb_simulation.wigner_measurement_1D(param_drive,starkshift_param,steps=9,
+    phase_calibration=False,if_echo=True,first_pulse_phases=[0,np.pi/2,np.pi,np.pi/2*3])
+    y_container.append(qb_simulation.y_array)
+
+#%%
+zz_data=np.array(y_container)
+def axis_for_mesh(axis):
+    begin=axis[0]
+    end=axis[-1]
+    length=len(axis)
+    step=axis[1]-axis[0]
+    begin=begin-step/2
+    end=end+step/2
+    length=length+1
+    return np.linspace(begin,end,length)
+
+xx,yy=np.meshgrid(axis_for_mesh(qb_simulation.x_array),axis_for_mesh(duration_list))
+fig, ax1, = plt.subplots(1, 1, figsize=(6,6))
+im = ax1.pcolormesh(yy,xx, zz_data, cmap='seismic')
+fig.colorbar(im)
+fig.legend()
+fig.show()
+
+
+
 # %%
 #plot 2D wigner
 wigner_data_list=[]

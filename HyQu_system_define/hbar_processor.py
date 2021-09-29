@@ -6,19 +6,19 @@ from qutip.qip.device.processor import Processor
 
 
 class HBAR_processor(Processor):
-    def __init__(self,N,t1,t2,dims,Omega=20,alpha=200,FSR=13,g=0.266,rest_place=6.5,coupling='full H'):
+    def __init__(self,N,t1,t2,dims,Omega=20,alpha=200,phonon_freq_list=[0],g=0.266,rest_place=6.5,coupling='full H'):
         super(HBAR_processor,self).__init__(N,t1,t2,dims)
         self.coupling=coupling
-        self.set_up_params(Omega,alpha,FSR,g,rest_place)
+        self.set_up_params(Omega,alpha,phonon_freq_list,g,rest_place)
         self.set_up_ops()
         self.set_up_drift() 
         
 
-    def set_up_params(self, Omega,alpha,FSR,g,rest_place):
+    def set_up_params(self, Omega,alpha,phonon_freq_list,g,rest_place):
         self.params = {}
         self.params["Omega"] = Omega  # default rabi frequency
         self.params["alpha"] = 2*np.pi*alpha  # enharmonic term
-        self.params['phonon_omega_z']=(np.array(range(self.N-1))*FSR-rest_place)*2*np.pi
+        self.params['phonon_omega_z']=(np.array(phonon_freq_list)-rest_place)*2*np.pi
         if type(g)==list:
             self.params['g']=np.array(g)*2*np.pi
         else:

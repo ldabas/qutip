@@ -14,7 +14,7 @@ from qutip.operators import num, phase, qeye
 import matplotlib.pyplot as plt
 import time
 from tqdm import tqdm
-import hbar_fitting
+import HyQu_system_define.hbar_fitting as hbar_fitting
 
 class Simulation():
     '''
@@ -348,9 +348,17 @@ class Simulation():
                 if if_echo:
                     circuit = QubitCircuit((self.processor.N))
                     circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2})
+
+                    circuit.add_gate('Wait',targets=0,arg_value=0.01)
                     circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param_1)
+                    circuit.add_gate('Wait',targets=0,arg_value=0.01)
+
                     circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi})
+
+                    circuit.add_gate('Wait',targets=0,arg_value=0.01)
                     circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param_2)
+                    circuit.add_gate('Wait',targets=0,arg_value=0.01)
+
                     circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
                         'rotate_direction':second_phase})
                     self.post_process(circuit,i)
@@ -378,10 +386,18 @@ class Simulation():
                         circuit = QubitCircuit((self.processor.N))
                         circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,
                         'rotate_direction':first_phase})
+
+                        circuit.add_gate('Wait',targets=0,arg_value=0.01)
                         circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param_1)
+                        circuit.add_gate('Wait',targets=0,arg_value=0.01)
+
                         circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi,
                         'rotate_direction':first_phase})
+
+                        circuit.add_gate('Wait',targets=0,arg_value=0.01)
                         circuit.add_gate('Z_R_GB',targets=[0,1],arg_value=starkshift_param_2)
+                        circuit.add_gate('Wait',targets=0,arg_value=0.01)
+
                         circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
                             'rotate_direction':self.calibration_phase+first_phase})
                         self.post_process(circuit,i,average_num=len(first_pulse_phases))
@@ -428,10 +444,18 @@ class Simulation():
                     circuit = QubitCircuit((self.processor.N))
                     circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,
                     'rotate_direction':first_phase})
+
+                    circuit.add_gate('Wait',targets=0,arg_value=0.01)
                     circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':y/2,'detuning':detuning})
+                    circuit.add_gate('Wait',targets=0,arg_value=0.01)
+
                     circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi,
                     'rotate_direction':first_phase})
+                    
+                    circuit.add_gate('Wait',targets=0,arg_value=0.01)
                     circuit.add_gate('Z_R_GB',targets=[0,1],arg_value={'duration':y/2,'detuning':-detuning})
+                    circuit.add_gate('Wait',targets=0,arg_value=0.01)
+
                     circuit.add_gate("X_R", targets=0,arg_value={'rotate_phase':np.pi/2,\
                         'rotate_direction':calibration_phases[int(i/len(first_pulse_phases))]+first_phase})
                     self.post_process(circuit,i,average_num=len(first_pulse_phases))
@@ -530,7 +554,7 @@ class Simulation():
 
     
     def fit_wigner(self):
-        wigner_array=np.linspace(-10,10,201)
+        wigner_array=np.linspace(-5,5,1001)
         wigner_2D=qt.wigner(self.initial_state.ptrace(1),wigner_array,wigner_array)
         position=np.where(wigner_2D==np.amax(wigner_2D))
         self.alpha=(1j*wigner_array[position[0]]+wigner_array[position[1]])[0]
